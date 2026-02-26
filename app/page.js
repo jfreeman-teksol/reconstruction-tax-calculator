@@ -1,51 +1,61 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { DollarSign, AlertTriangle, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { DollarSign, AlertTriangle, TrendingUp, Clock, Calendar } from 'lucide-react';
+
+const BOOKING_URL = "https://outlook.office.com/bookwithme/user/73ce913e61ec43db99eddfad99a96ead%40yavardi.com/meetingtype/_vaZ8cL86UG1locDCtC5CA2?bookingcode=4261da7b-58fd-46b7-8c8e-b7fb03279a9b&anonymous&ismsaljsauthenabled";
+const FORMSPREE_ENDPOINT = "https://formspree.io/f/xkovyjky";
 
 export default function ReconstructionTaxCalculator() {
   const [firmData, setFirmData] = useState({
-    attorneys: 50,
-    blendedRate: 300,
-    matterVolume: 400
+    attorneys: '',
+    blendedRate: '',
+    matterVolume: '',
+    billableHours: '',
+    leakageRate: ''
   });
 
-  const [results, setResults] = useState(null);
+  const [leadData, setLeadData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    firmName: ''
+  });
 
-  useEffect(() => {
-    calculateTax();
-  }, [firmData]);
+  const [leadSubmitted, setLeadSubmitted] = useState(false);
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadError, setLeadError] = useState('');
 
-  const calculateTax = () => {
-    const { attorneys, blendedRate, matterVolume } = firmData;
-    
-    const effectiveBillableHours = 730;
-    const annualRecordedPerAttorney = effectiveBillableHours * blendedRate;
-    const firmWideRecorded = attorneys * annualRecordedPerAttorney;
-    
-    const realizationLeakage = firmWideRecorded * 0.12;
-    
-    const reconstructionRate = matterVolume * 0.10;
-    const hoursPerMatter = 8;
-    const seniorCost = 250;
-    const capacityLeakage = reconstructionRate * hoursPerMatter * seniorCost;
-    
-    const totalExposure = realizationLeakage + capacityLeakage;
-    const monthlyTax = totalExposure / 12;
-    
-    const addressableRealization = realizationLeakage * 0.25;
-    const addressableCapacity = capacityLeakage * 0.30;
-
-    setResults({
-      realizationLeakage,
-      capacityLeakage,
-      totalExposure,
-      monthlyTax,
-      addressableRealization,
-      addressableCapacity,
-      firmWideRecorded
-    });
+  const allInputsFilled = () => {
+    return Object.values(firmData).every(v => v !== '' && parseFloat(v) > 0);
   };
+
+  const calculateResults = () => {
+    const attorneys = parseFloat(firmData.attorneys);
+    const blendedRate = parseFloat(firmData.blendedRate);
+    const matterVolume = parseFloat(firmData.matterVolume);
+    const billableHours = parseFloat(firmData.billableHours);
+    const leakageRate = parseFloat(firmData.leakageRate) / 100;
+
+    const firmWideRecorded = attorneys * billableHours * blendedRate;
+    const realizationLeak = firmWideRecorded * leakageRate;
+    const capacityLeak = matterVolume * 0.10 * 8 * blendedRate;
+    const total = realizationLeak + capacityLeak;
+    const addrR = realizationLeak * 0.25;
+    const addrC = capacityLeak * 0.30;
+
+    return {
+      firmWideRecorded,
+      realizationLeak,
+      capacityLeak,
+      total,
+      monthly: total / 12,
+      addrR,
+      addrC
+    };
+  };
+
+  const results = allInputsFilled() ? calculateResults() : null;
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
@@ -56,231 +66,305 @@ export default function ReconstructionTaxCalculator() {
     }).format(value);
   };
 
+  const handleLeadSubmit = async () => {
+    if (!leadData.firstName || !leadData.lastName || !leadData.email || !leadData.firmName) {
+      setLeadError('All fields are required.');
+      return;
+    }
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(leadData.email);
+    if (!emailValid) {
+      setLeadError('Enter a valid email address.');
+      return;
+    }
+    const personalDomains = ['gmail.com','yahoo.com','hotmail.com','outlook.com','icloud.com','aol.com','protonmail.com','mail.com','msn.com','live.com','me.com','mac.com'];
+    const emailDomain = leadData.email.split('@')[1]?.toLowerCase();
+    if (personalDomains.includes(emailDomain)) {
+      setLeadError('Please enter a work email address.');
+      return;
+    }
+
+    setLeadSubmitting(true);
+    setLeadError('');
+
+    try {
+      const payload = {
+        ...leadData,
+        attorneys: firmData.attorneys,
+        blendedRate: firmData.blendedRate,
+        matterVolume: firmData.matterVolume,
+        billableHours: firmData.billableHours,
+        leakageRate: firmData.leakageRate,
+        annualAddressableExposure: results ? formatCurrency(results.addrR) : 'N/A',
+        annualTax: results ? formatCurrency(results.total) : 'N/A',
+        monthlyTax: results ? formatCurrency(results.monthly) : 'N/A',
+        submittedAt: new Date().toISOString()
+      };
+
+      const response = await fetch(FORMSPREE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setLeadSubmitted(true);
+      } else {
+        setLeadError('Submission failed. Please try again.');
+      }
+    } catch (err) {
+      setLeadError('Submission failed. Please try again.');
+    }
+
+    setLeadSubmitting(false);
+  };
+
+  const inputStyle = {
+    width: '100%',
+    background: 'rgb(15,23,42)',
+    border: '1px solid rgb(71,85,105)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    color: 'white',
+    fontSize: '16px',
+    fontFamily: 'Georgia, Times New Roman, serif',
+    boxSizing: 'border-box',
+    outline: 'none'
+  };
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: 'rgb(203,213,225)',
+    marginBottom: '8px'
+  };
+
+  const cardStyle = {
+    background: 'rgba(30,41,59,0.5)',
+    borderRadius: '12px',
+    padding: '32px 40px',
+    marginBottom: '32px',
+    border: '1px solid rgb(51,65,85)'
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-8" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-10 h-10 text-red-500" />
-              <h1 className="text-4xl font-bold" style={{ fontFamily: "'Crimson Text', 'Georgia', serif", letterSpacing: '0.02em' }}>Reconstruction Tax Calculator</h1>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, rgb(15,23,42) 0%, rgb(30,41,59) 50%, rgb(15,23,42) 100%)', color: 'white', padding: '32px', fontFamily: 'Georgia, Times New Roman, serif' }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: '48px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <AlertTriangle style={{ width: '40px', height: '40px', color: 'rgb(239,68,68)' }} />
+              <h1 style={{ fontSize: '36px', fontWeight: 700, fontFamily: 'Georgia, serif', letterSpacing: '0.02em', margin: 0 }}>Reconstruction Tax Calculator</h1>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold tracking-wider" style={{ fontFamily: "'Crimson Text', 'Georgia', serif", letterSpacing: '0.15em' }}>YAVARDI</div>
-              <div className="text-sm text-slate-400" style={{ fontFamily: "'Georgia', serif" }}>Technology Governance for Legal Operations</div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.15em' }}>YAVARDI</div>
+              <div style={{ fontSize: '13px', color: 'rgb(148,163,184)' }}>Technology Governance for Legal Operations</div>
             </div>
           </div>
-          <p className="text-slate-300 text-lg">
-            Calculate the hidden tax your firm pays monthly for missing digital proof of authority
-          </p>
+          <p style={{ fontSize: '18px', color: 'rgb(203,213,225)', margin: 0 }}>Calculate the hidden tax your firm pays for missing digital proof of authority</p>
         </div>
 
-        <div className="bg-slate-800/50 rounded-xl p-8 mb-8 border border-slate-700">
-          <h2 className="text-2xl font-semibold mb-6" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>Firm Profile</h2>
-          
-          <div className="grid md:grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Number of Attorneys
-              </label>
-              <input
-                type="number"
-                value={firmData.attorneys}
-                onChange={(e) => setFirmData({...firmData, attorneys: parseInt(e.target.value) || 0})}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-                min="1"
-              />
-            </div>
+        {/* Firm Profile Inputs */}
+        <div style={cardStyle}>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px', fontFamily: 'Georgia, serif', marginTop: 0 }}>Firm Profile</h2>
+          <p style={{ fontSize: '13px', color: 'rgb(100,116,139)', marginBottom: '28px', marginTop: 0 }}>Enter your firm's actual numbers. All fields required to generate results.</p>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Blended Hourly Rate ($)
-              </label>
-              <input
-                type="number"
-                value={firmData.blendedRate}
-                onChange={(e) => setFirmData({...firmData, blendedRate: parseInt(e.target.value) || 0})}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-                min="1"
-              />
+              <label style={labelStyle}>Number of Attorneys</label>
+              <input style={inputStyle} type="number" value={firmData.attorneys} onChange={e => setFirmData({ ...firmData, attorneys: e.target.value })} min="1" />
             </div>
+            <div>
+              <label style={labelStyle}>Blended Hourly Rate ($)</label>
+              <input style={inputStyle} type="number" value={firmData.blendedRate} onChange={e => setFirmData({ ...firmData, blendedRate: e.target.value })} min="1" />
+            </div>
+            <div>
+              <label style={labelStyle}>Annual Matter Volume</label>
+              <input style={inputStyle} type="number" value={firmData.matterVolume} onChange={e => setFirmData({ ...firmData, matterVolume: e.target.value })} min="1" />
+            </div>
+            <div>
+              <label style={labelStyle}>Target Billable Hours / Attorney <span style={{ fontSize: '12px', color: 'rgb(100,116,139)', fontWeight: 400 }}>— Industry avg: 730</span></label>
+              <input style={inputStyle} type="number" value={firmData.billableHours} onChange={e => setFirmData({ ...firmData, billableHours: e.target.value })} min="1" />
+            </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Annual Matter Volume
-              </label>
-              <input
-                type="number"
-                value={firmData.matterVolume}
-                onChange={(e) => setFirmData({...firmData, matterVolume: parseInt(e.target.value) || 0})}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-                min="1"
-              />
-            </div>
+          <div>
+            <label style={labelStyle}>Realization Leakage Rate (%) <span style={{ fontSize: '12px', color: 'rgb(100,116,139)', fontWeight: 400 }}>— Industry avg: 12%</span></label>
+            <input style={inputStyle} type="number" value={firmData.leakageRate} onChange={e => setFirmData({ ...firmData, leakageRate: e.target.value })} min="0.1" max="100" step="0.1" />
+            <p style={{ fontSize: '12px', color: 'rgb(100,116,139)', marginTop: '6px', marginBottom: 0 }}>Percentage of recorded billable value written down before invoicing</p>
           </div>
         </div>
 
-        {results && (
+        {/* Lead Gate */}
+        {results && !leadSubmitted && (
+          <div style={{ ...cardStyle, border: '1px solid rgba(59,130,246,0.4)' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px', fontFamily: 'Georgia, serif', marginTop: 0 }}>Your Results Are Ready</h2>
+            <p style={{ fontSize: '13px', color: 'rgb(100,116,139)', marginBottom: '28px', marginTop: 0 }}>Enter your contact information to view your firm's Reconstruction Tax exposure.</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+              <div>
+                <label style={labelStyle}>First Name</label>
+                <input style={inputStyle} type="text" value={leadData.firstName} onChange={e => setLeadData({ ...leadData, firstName: e.target.value })} />
+              </div>
+              <div>
+                <label style={labelStyle}>Last Name</label>
+                <input style={inputStyle} type="text" value={leadData.lastName} onChange={e => setLeadData({ ...leadData, lastName: e.target.value })} />
+              </div>
+              <div>
+                <label style={labelStyle}>Work Email</label>
+                <input style={inputStyle} type="email" value={leadData.email} onChange={e => setLeadData({ ...leadData, email: e.target.value })} />
+              </div>
+              <div>
+                <label style={labelStyle}>Firm Name</label>
+                <input style={inputStyle} type="text" value={leadData.firmName} onChange={e => setLeadData({ ...leadData, firmName: e.target.value })} />
+              </div>
+            </div>
+
+            {leadError && <p style={{ color: 'rgb(239,68,68)', fontSize: '13px', marginBottom: '16px' }}>{leadError}</p>}
+
+            <button
+              onClick={handleLeadSubmit}
+              disabled={leadSubmitting}
+              style={{ width: '100%', background: leadSubmitting ? 'rgb(30,58,138)' : 'rgb(37,99,235)', color: 'white', border: 'none', borderRadius: '8px', padding: '16px 24px', fontSize: '18px', fontFamily: 'Georgia, serif', fontWeight: 600, cursor: leadSubmitting ? 'default' : 'pointer' }}
+            >
+              {leadSubmitting ? 'Submitting...' : 'Show My Reconstruction Tax →'}
+            </button>
+            <p style={{ fontSize: '11px', color: 'rgb(71,85,105)', textAlign: 'center', marginTop: '12px', marginBottom: 0 }}>Used only to follow up on your results. No spam.</p>
+          </div>
+        )}
+
+        {/* Results */}
+        {results && leadSubmitted && (
           <>
-            <div className="bg-gradient-to-br from-red-900/30 to-red-800/30 rounded-xl p-8 mb-8 border-2 border-red-500/50">
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <h2 className="text-3xl font-bold mb-2" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>Your Reconstruction Tax</h2>
-                  <p className="text-red-200">The cost of missing digital proof of authority</p>
-                </div>
-                <DollarSign className="w-12 h-12 text-red-400" />
+            {/* Hero — Addressable Realization */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(127,29,29,0.7), rgba(100,10,10,0.8))', borderRadius: '12px', padding: '40px 48px', marginBottom: '24px', border: '2px solid rgba(239,68,68,0.6)' }}>
+              <div style={{ fontSize: '11px', letterSpacing: '0.18em', color: 'rgb(252,165,165)', textTransform: 'uppercase', marginBottom: '8px' }}>Estimated Defensive Write-Downs from Missing Authority Records</div>
+              <div style={{ fontSize: '13px', color: 'rgb(185,130,130)', marginBottom: '28px', lineHeight: 1.6 }}>
+                At {leadData.firmName}, approximately 25% of pre-invoice write-downs are defensive — value conceded not because work was unjustified, but because authorization could not be proven.
               </div>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-slate-900/50 rounded-lg p-6 border-2 border-red-500/30">
-                  <div className="text-red-400 text-sm font-medium mb-2" style={{ letterSpacing: '0.1em' }}>MONTHLY TAX</div>
-                  <div className="text-6xl font-bold text-red-400" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>{formatCurrency(results.monthlyTax)}</div>
-                  <div className="text-slate-400 mt-2">Every 30 days</div>
+
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', marginBottom: '36px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '11px', letterSpacing: '0.12em', color: 'rgb(252,165,165)', textTransform: 'uppercase', marginBottom: '6px' }}>Annual Addressable Exposure</div>
+                  <div style={{ fontSize: '72px', fontWeight: 700, color: 'rgb(239,68,68)', fontFamily: 'Georgia, serif', lineHeight: 1 }}>{formatCurrency(results.addrR)}</div>
                 </div>
-                
-                <div className="bg-slate-900/50 rounded-lg p-6 border-2 border-red-500/30">
-                  <div className="text-red-400 text-sm font-medium mb-2" style={{ letterSpacing: '0.1em' }}>ANNUAL TAX</div>
-                  <div className="text-6xl font-bold text-red-400" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>{formatCurrency(results.totalExposure)}</div>
-                  <div className="text-slate-400 mt-2">Conservative floor</div>
+                <div style={{ paddingBottom: '12px' }}>
+                  <div style={{ fontSize: '13px', color: 'rgb(185,130,130)' }}>per year in write-downs</div>
+                  <div style={{ fontSize: '13px', color: 'rgb(185,130,130)' }}>tied directly to missing proof of authority</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: '8px', padding: '16px 20px' }}>
+                  <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'rgb(185,130,130)', textTransform: 'uppercase', marginBottom: '6px' }}>Monthly</div>
+                  <div style={{ fontSize: '28px', fontWeight: 700, color: 'rgb(239,68,68)', fontFamily: 'Georgia, serif' }}>{formatCurrency(results.addrR / 12)}</div>
+                  <div style={{ fontSize: '12px', color: 'rgb(120,80,80)', marginTop: '4px' }}>addressable / month</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: '8px', padding: '16px 20px' }}>
+                  <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'rgb(185,130,130)', textTransform: 'uppercase', marginBottom: '6px' }}>Total Realization Leakage</div>
+                  <div style={{ fontSize: '28px', fontWeight: 700, color: 'rgb(203,213,225)', fontFamily: 'Georgia, serif' }}>{formatCurrency(results.realizationLeak)}</div>
+                  <div style={{ fontSize: '12px', color: 'rgb(120,80,80)', marginTop: '4px' }}>written down annually</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.35)', borderRadius: '8px', padding: '16px 20px' }}>
+                  <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'rgb(185,130,130)', textTransform: 'uppercase', marginBottom: '6px' }}>Firm Recorded Value</div>
+                  <div style={{ fontSize: '28px', fontWeight: 700, color: 'rgb(203,213,225)', fontFamily: 'Georgia, serif' }}>{formatCurrency(results.firmWideRecorded)}</div>
+                  <div style={{ fontSize: '12px', color: 'rgb(120,80,80)', marginTop: '4px' }}>annual billable recorded</div>
                 </div>
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
-                <div className="flex items-center gap-3 mb-4">
-                  <TrendingUp className="w-6 h-6 text-orange-400" />
-                  <h3 className="text-xl font-semibold" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>Realization Tax</h3>
+            {/* Total Exposure Context */}
+            <div style={{ background: 'rgba(20,25,35,0.7)', borderRadius: '12px', padding: '28px 40px', marginBottom: '24px', border: '1px solid rgb(40,50,65)' }}>
+              <div style={{ fontSize: '11px', letterSpacing: '0.12em', color: 'rgb(71,85,105)', textTransform: 'uppercase', marginBottom: '16px' }}>Total Reconstruction Tax — Full Economic Context</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'rgb(71,85,105)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Annual Tax</div>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: 'rgb(185,50,50)', fontFamily: 'Georgia, serif' }}>{formatCurrency(results.total)}</div>
+                  <div style={{ fontSize: '12px', color: 'rgb(55,65,81)', marginTop: '4px' }}>Realization + Capacity leakage</div>
                 </div>
-                <div className="text-4xl font-bold mb-2 text-white" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>{formatCurrency(results.realizationLeakage)}</div>
-                <p className="text-slate-400 mb-4">Annual revenue written down</p>
-                <div className="bg-slate-900/50 rounded-lg p-4 text-sm text-slate-300">
-                  Partners write down {formatCurrency(results.realizationLeakage)} annually during billing review. Authorization existed. Digital proof was never captured. <strong className="text-orange-300">{formatCurrency(results.addressableRealization)}</strong> is defensive write-downs from missing proof of authority.
+                <div>
+                  <div style={{ fontSize: '11px', color: 'rgb(71,85,105)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Monthly Tax</div>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: 'rgb(185,50,50)', fontFamily: 'Georgia, serif' }}>{formatCurrency(results.monthly)}</div>
+                  <div style={{ fontSize: '12px', color: 'rgb(55,65,81)', marginTop: '4px' }}>Every 30 days</div>
                 </div>
-              </div>
-
-              <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
-                <div className="flex items-center gap-3 mb-4">
-                  <Clock className="w-6 h-6 text-blue-400" />
-                  <h3 className="text-xl font-semibold" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>Capacity Tax</h3>
-                </div>
-                <div className="text-4xl font-bold mb-2 text-white" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>{formatCurrency(results.capacityLeakage)}</div>
-                <p className="text-slate-400 mb-4">Annual capacity consumed</p>
-                <div className="bg-slate-900/50 rounded-lg p-4 text-sm text-slate-300">
-                  Senior attorneys consume {formatCurrency(results.capacityLeakage)} annually reconstructing authority. Email searches, calendar reviews, explaining old decisions. <strong className="text-blue-300">{formatCurrency(results.addressableCapacity)}</strong> is authority-driven reconstruction.
+                <div>
+                  <div style={{ fontSize: '11px', color: 'rgb(71,85,105)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>Capacity Leakage</div>
+                  <div style={{ fontSize: '36px', fontWeight: 700, color: 'rgb(185,50,50)', fontFamily: 'Georgia, serif' }}>{formatCurrency(results.capacityLeak)}</div>
+                  <div style={{ fontSize: '12px', color: 'rgb(55,65,81)', marginTop: '4px' }}>Senior time burned on reconstruction</div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-800/50 rounded-xl p-8 mb-8 border border-slate-700">
-              <h2 className="text-2xl font-bold mb-6" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>What This Tax Costs You</h2>
-              
-              <div className="grid md:grid-cols-2 gap-8">
+            {/* Where it originates */}
+            <div style={cardStyle}>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Georgia, serif', marginTop: 0, marginBottom: '20px' }}>Where This Tax Originates</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
                 <div>
-                  <div className="text-5xl font-bold text-red-400 mb-2" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>{formatCurrency(results.monthlyTax)}</div>
-                  <div className="text-slate-400 mb-6">Monthly accumulation</div>
-                  
-                  <div className="space-y-3 text-slate-300">
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
-                      <div>Partners writing down <strong className="text-white">{formatCurrency(results.realizationLeakage / 12)}/month</strong> in unbillable work</div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
-                      <div>Senior capacity bleeding <strong className="text-white">{formatCurrency(results.capacityLeakage / 12)}/month</strong> to reconstruction</div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
-                      <div>Billing disputes resolved through concession, not evidence</div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 bg-red-400 rounded-full mt-2"></div>
-                      <div>Partner conflicts over historical authorization</div>
-                    </div>
+                  <div style={{ fontSize: '11px', letterSpacing: '0.12em', color: 'rgb(251,146,60)', textTransform: 'uppercase', marginBottom: '12px' }}>Realization Leakage</div>
+                  <p style={{ fontSize: '13px', color: 'rgb(148,163,184)', lineHeight: 1.7, marginTop: 0 }}>
+                    During billing review, partners write down recorded time when authorization cannot be proven. The work was done. The authorization existed. The digital record was never captured. The firm concedes value to avoid dispute — not because the charge was wrong.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                    {['Partners second-guess past decisions', 'Clients challenge scope without documentation', 'Staff cannot defend charges under scrutiny', 'Discounts applied to preserve relationships'].map((t, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                        <div style={{ width: '6px', height: '6px', background: 'rgb(251,146,60)', borderRadius: '50%', flexShrink: 0, marginTop: '5px' }} />
+                        <div style={{ fontSize: '12px', color: 'rgb(100,116,139)' }}>{t}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-
                 <div>
-                  <div className="text-5xl font-bold text-red-400 mb-2" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>{formatCurrency(results.totalExposure)}</div>
-                  <div className="text-slate-400 mb-6">Annual tax liability</div>
-                  
-                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-                    <div className="text-red-200 text-sm font-semibold mb-2" style={{ letterSpacing: '0.05em' }}>TAX MULTIPLIERS</div>
-                    <div className="space-y-2 text-xs text-slate-300">
-                      <div>• Carrier audits and reviews</div>
-                      <div>• Client billing challenges</div>
-                      <div>• Partner compensation disputes</div>
-                      <div>• Discovery authority requirements</div>
-                      <div>• Malpractice claim reconstruction</div>
-                    </div>
+                  <div style={{ fontSize: '11px', letterSpacing: '0.12em', color: 'rgb(96,165,250)', textTransform: 'uppercase', marginBottom: '12px' }}>Capacity Leakage</div>
+                  <p style={{ fontSize: '13px', color: 'rgb(148,163,184)', lineHeight: 1.7, marginTop: 0 }}>
+                    After disputes surface, senior attorney time is consumed reconstructing what happened — searching emails, reviewing calendars, explaining old decisions. That time could have been billable. It produces no revenue.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                    {['Email and calendar reconstruction', 'Partner debate over historical authorization', 'Attorney time explaining prior work', 'Reconstruction that never becomes billable'].map((t, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                        <div style={{ width: '6px', height: '6px', background: 'rgb(96,165,250)', borderRadius: '50%', flexShrink: 0, marginTop: '5px' }} />
+                        <div style={{ fontSize: '12px', color: 'rgb(100,116,139)' }}>{t}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
+
+              <div style={{ marginTop: '28px', background: 'rgba(80,20,20,0.3)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '16px 20px' }}>
+                <div style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'rgb(252,165,165)', textTransform: 'uppercase', marginBottom: '10px' }}>Tax Multipliers — Not Included in This Estimate</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                  {['Carrier audits and reviews', 'Client billing challenges', 'Partner compensation disputes', 'Discovery authority requirements', 'Malpractice claim reconstruction'].map((t, i) => (
+                    <div key={i} style={{ fontSize: '12px', color: 'rgb(100,116,139)' }}>• {t}</div>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 rounded-xl p-8 border-2 border-blue-500/50">
-              <div className="flex items-center gap-4 mb-6">
-                <CheckCircle className="w-12 h-12 text-blue-400" />
+            {/* CTA */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(29,78,216,0.3), rgba(30,64,175,0.3))', borderRadius: '12px', padding: '32px 40px', border: '2px solid rgba(59,130,246,0.5)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                <Calendar style={{ width: '48px', height: '48px', color: 'rgb(96,165,250)', flexShrink: 0 }} />
                 <div>
-                  <h2 className="text-3xl font-bold" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>Dominion Baseline Assessment</h2>
-                  <p className="text-blue-200 text-lg mt-1">30-day authority gap diagnostic</p>
+                  <h2 style={{ fontSize: '28px', fontWeight: 700, fontFamily: 'Georgia, serif', margin: 0 }}>Governance Discovery Call</h2>
+                  <p style={{ color: 'rgb(191,219,254)', marginTop: '4px', marginBottom: 0, fontSize: '15px' }}>A deep-dive session to identify your authority gap exposure</p>
                 </div>
               </div>
-
-              <div className="grid md:grid-cols-3 gap-6 mb-6">
-                <div className="bg-slate-900/50 rounded-lg p-6 border-2 border-blue-500/30">
-                  <div className="text-blue-400 text-sm font-medium mb-2" style={{ letterSpacing: '0.1em' }}>INVESTMENT</div>
-                  <div className="text-5xl font-bold text-blue-400" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>$7,500</div>
-                  <div className="text-slate-400 text-sm mt-2">Paid in advance</div>
-                </div>
-                
-                <div className="bg-slate-900/50 rounded-lg p-6">
-                  <div className="text-slate-400 text-sm font-medium mb-2" style={{ letterSpacing: '0.1em' }}>TIMELINE</div>
-                  <div className="text-4xl font-bold" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>30</div>
-                  <div className="text-slate-400 text-sm mt-2">Days to complete</div>
-                </div>
-
-                <div className="bg-slate-900/50 rounded-lg p-6">
-                  <div className="text-slate-400 text-sm font-medium mb-2" style={{ letterSpacing: '0.1em' }}>KICKOFF</div>
-                  <div className="text-4xl font-bold" style={{ fontFamily: "'Crimson Text', 'Georgia', serif" }}>5</div>
-                  <div className="text-slate-400 text-sm mt-2">Days after access</div>
-                </div>
-              </div>
-
-              <div className="bg-slate-900/50 rounded-lg p-6 mb-4">
-                <p className="text-slate-300 mb-4">
-                  <strong className="text-white">The Baseline maps every authority gap in your environment.</strong> We document where decisions execute without preserved digital proof of authority and quantify the financial impact.
-                </p>
-                <div className="grid md:grid-cols-2 gap-4 text-sm text-slate-400">
-                  <div>• Authority failure mapping</div>
-                  <div>• Financial impact quantification</div>
-                  <div>• Execution risk documentation</div>
-                  <div>• Governance implementation path</div>
-                </div>
-              </div>
-
-              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                <p className="text-blue-200 text-sm">
-                  <strong>Next step:</strong> Baseline kickoff. Assessment begins within 5 business days of access provisioning.
-                </p>
-              </div>
+              <p style={{ fontSize: '14px', color: 'rgb(100,116,139)', marginBottom: '28px', lineHeight: 1.7 }}>
+                Your firm has an estimated <strong style={{ color: 'rgb(239,68,68)' }}>{formatCurrency(results.addrR)}</strong> in annual write-downs tied directly to missing proof of authority. This call maps the specific authority failure points driving that exposure and what it takes to close them.
+              </p>
+              <a
+                href={BOOKING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: 'block', width: '100%', background: 'rgb(37,99,235)', color: 'white', borderRadius: '8px', padding: '18px 24px', fontSize: '18px', fontFamily: 'Georgia, serif', fontWeight: 600, textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}
+              >
+                Schedule Your Discovery Call →
+              </a>
             </div>
 
-            <div className="mt-12 bg-slate-900/30 rounded-lg p-6 border border-slate-700">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-400" style={{ letterSpacing: '0.05em' }}>METHODOLOGY</h3>
-                <div className="text-xs text-slate-500">Yavardi Legal Economic Model</div>
-              </div>
-              <div className="text-xs text-slate-400 space-y-2">
-                <p>• 730 effective billable hours per attorney annually (conservative floor)</p>
-                <p>• 12% realization leakage (industry standard pre-invoice write-downs)</p>
-                <p>• 10% of matters trigger reconstruction at 8 hours senior time per matter</p>
-                <p>• 25% of realization write-downs are defensive, 30% of capacity burn is authority-driven</p>
-                <p>• Excludes insurance exposure, motion practice costs, regulatory penalties, reputational impact</p>
-              </div>
+            <div style={{ marginTop: '48px', textAlign: 'center', fontSize: '12px', color: 'rgb(51,65,85)' }}>
+              © {new Date().getFullYear()} Yavardi. All rights reserved.
             </div>
           </>
         )}
