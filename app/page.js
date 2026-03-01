@@ -211,7 +211,6 @@ export default function ReconstructionTaxCalculator() {
             <button onClick={handleLeadSubmit} disabled={leadSubmitting} style={{ width: '100%', background: leadSubmitting ? 'rgb(30,58,138)' : 'rgb(37,99,235)', color: 'white', border: 'none', borderRadius: '8px', padding: '16px 24px', fontSize: '18px', fontFamily: 'Georgia, serif', fontWeight: 700, cursor: leadSubmitting ? 'default' : 'pointer' }}>
               {leadSubmitting ? 'Submitting...' : 'Show My Reconstruction Tax →'}
             </button>
-            <p style={{ fontSize: '11px', color: T.dim, textAlign: 'center', marginTop: '12px', marginBottom: 0 }}>Used only to follow up on your results. No spam.</p>
           </div>
         )}
 
@@ -224,7 +223,7 @@ export default function ReconstructionTaxCalculator() {
                 Estimated Defensive Write-Downs from Missing Authority Records
               </div>
               <div style={{ fontSize: isMobile ? '14px' : '15px', color: 'rgb(248,200,200)', marginBottom: '32px', lineHeight: 1.7, fontWeight: 500 }}>
-                At {leadData.firmName}, approximately 25% of pre-invoice write-downs are defensive — value conceded not because work was unjustified, but because authorization could not be proven.
+                At {leadData.firmName}, a portion of pre-invoice write-downs are defensive — value conceded not because work was unjustified, but because authorization could not be proven.
               </div>
               <div style={{ marginBottom: '28px' }}>
                 <div style={{ ...sectionLabel, color: T.redSoft, marginBottom: '8px' }}>Annual Addressable Exposure</div>
@@ -273,7 +272,6 @@ export default function ReconstructionTaxCalculator() {
                   <div style={{ marginTop: 'auto', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '14px 16px' }}>
                     <div style={{ ...sectionLabel, color: T.redSoft, marginBottom: '6px' }}>Defensible Portion</div>
                     <div style={{ fontSize: '26px', fontWeight: 700, color: T.red, fontFamily: 'Georgia, serif' }}>{fmt(results.addrR)}</div>
-                    <div style={{ fontSize: '11px', color: T.dim, marginTop: '4px' }}>25% of realization leakage tied to missing proof of authority</div>
                   </div>
                 </div>
 
@@ -300,7 +298,6 @@ export default function ReconstructionTaxCalculator() {
                   <div style={{ marginTop: 'auto', background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '14px 16px' }}>
                     <div style={{ ...sectionLabel, color: T.redSoft, marginBottom: '6px' }}>Authority-Driven Portion</div>
                     <div style={{ fontSize: '26px', fontWeight: 700, color: T.red, fontFamily: 'Georgia, serif' }}>{fmt(results.addrC)}</div>
-                    <div style={{ fontSize: '11px', color: T.dim, marginTop: '4px' }}>30% of capacity leakage driven by missing authority records</div>
                   </div>
                 </div>
               </div>
